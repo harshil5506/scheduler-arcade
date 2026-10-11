@@ -1,0 +1,11 @@
+# Dependencies
+node_modules/
+
+# OS and temporary files
+.DS_Store
+Thumbs.db
+*.log
+
+# IDE and local scratch
+.system_generated/
+scratch/

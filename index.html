@@ -1,0 +1,455 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Scheduler Arcade - CPU Scheduling Educational Platformer</title>
+  <meta name="description" content="Master operating system CPU scheduling algorithms (FCFS, SJF, Priority, Round Robin, MLFQ) in a retro 16-bit arcade platformer with real-time Gantt charts, boss battles, and split-screen versus mode.">
+  <!-- Crisp Pixel Art CPU Chip Favicon -->
+  <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3E%3Crect width='16' height='16' fill='%230d1117'/%3E%3Crect x='3' y='3' width='10' height='10' fill='%2321262d' stroke='%2358a6ff' stroke-width='1'/%3E%3Crect x='5' y='5' width='6' height='6' fill='%23f1c40f'/%3E%3Crect x='1' y='5' width='2' height='2' fill='%23388bfd'/%3E%3Crect x='1' y='9' width='2' height='2' fill='%23388bfd'/%3E%3Crect x='13' y='5' width='2' height='2' fill='%23388bfd'/%3E%3Crect x='13' y='9' width='2' height='2' fill='%23388bfd'/%3E%3Crect x='5' y='1' width='2' height='2' fill='%23388bfd'/%3E%3Crect x='9' y='1' width='2' height='2' fill='%23388bfd'/%3E%3Crect x='5' y='13' width='2' height='2' fill='%23388bfd'/%3E%3Crect x='9' y='13' width='2' height='2' fill='%23388bfd'/%3E%3C/svg%3E">
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+  <div id="game-wrapper">
+    <canvas id="game-canvas" width="1000" height="620"></canvas>
+    <div class="scanlines"></div>
+
+    <!-- Bottom Action Controls Bar -->
+    <div id="controls-bar">
+      <div class="bar-group">
+        <button id="btn-play-pause" class="arcade-btn btn-primary" title="Play or Pause simulation [Space]">PLAY [>]</button>
+        <button id="btn-step" class="arcade-btn" title="Single step simulation tick [Right Arrow]">STEP [>>]</button>
+        <button id="btn-reset" class="arcade-btn btn-danger" title="Reset simulation [R]">RESET [R]</button>
+        <button id="btn-speed" class="arcade-btn" title="Toggle simulation speed">SPEED: 1x</button>
+      </div>
+
+      <div class="bar-group">
+        <button id="btn-preempt" class="arcade-btn btn-warning" title="Trigger Preemption / Signature Power">POWER [P]</button>
+        <button id="btn-sandbox-open" class="arcade-btn" title="Configure Workload & Sliders">CONFIG</button>
+        <button id="btn-pause-menu" class="arcade-btn" title="Open Main Menu [Esc]">MENU [ESC]</button>
+      </div>
+    </div>
+
+    <!-- 1. MAIN MENU OVERLAY -->
+    <div id="menu-overlay" class="overlay-panel">
+      <h1 class="main-menu-logo">SCHEDULER ARCADE</h1>
+      <p class="main-menu-subtitle">THE OPERATING SYSTEM CPU SCHEDULING GAME</p>
+      
+      <div class="menu-options">
+        <button id="menu-btn-play" class="arcade-btn btn-primary">[CAMPAIGN] PUZZLE MISSIONS</button>
+        <button id="menu-btn-characters" class="arcade-btn">[HEROES] CHARACTER SELECT</button>
+        <button id="menu-btn-sandbox" class="arcade-btn btn-success">[LAB] SANDBOX WORKLOAD LAB</button>
+        <button id="menu-btn-draft" class="arcade-btn">[DRAFT] SCHEDULER DRAFT</button>
+        <button id="menu-btn-versus" class="arcade-btn">[VERSUS] SPLIT-SCREEN DUEL</button>
+        <button id="menu-btn-survival" class="arcade-btn btn-warning">[SURVIVAL] ENDLESS SLA DEFENSE</button>
+        <button id="menu-btn-boss" class="arcade-btn btn-danger">[BOSS] BATTLE: MEMORY HOG</button>
+        <button id="menu-btn-tuner" class="arcade-btn">[TUNER] QUANTUM TUNER GRAPH</button>
+        <button id="menu-btn-guide" class="arcade-btn">[GUIDE] OS VIVA REFERENCE</button>
+        <button id="menu-btn-settings" class="arcade-btn">[SETTINGS] AUDIO AND CONTROLS</button>
+        <div style="display:flex; justify-content:center; gap:16px; margin-top:8px;">
+          <button id="menu-btn-privacy" class="arcade-btn" style="font-size:7px; padding:6px 10px;">PRIVACY POLICY</button>
+          <button id="menu-btn-terms" class="arcade-btn" style="font-size:7px; padding:6px 10px;">TERMS OF SERVICE</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- 2. CHARACTER SELECT OVERLAY -->
+    <div id="char-select-overlay" class="overlay-panel hidden">
+      <div class="modal-box">
+        <div class="modal-header">
+          <h2 class="modal-title">CHOOSE YOUR SCHEDULER CHAMPION</h2>
+          <button class="arcade-btn btn-danger close-modal" data-target="char-select-overlay">X</button>
+        </div>
+        <div class="char-grid">
+          <!-- FCFS -->
+          <div class="char-card selected" data-char="fcfs">
+            <h3 class="char-name">QUEUE KNIGHT (FCFS)</h3>
+            <p class="char-role">The Orderly Defender</p>
+            <p class="char-power">POWER: Unbreakable Line (Strict FIFO, 0 context switch overhead)</p>
+            <p class="char-weakness">WEAKNESS: Convoy Effect (Long jobs block all short ones)</p>
+          </div>
+          <!-- SJF -->
+          <div class="char-card" data-char="sjf">
+            <h3 class="char-name">SPEEDSTER (SJF / SRTF)</h3>
+            <p class="char-role">The Impatient Sprinter</p>
+            <p class="char-power">POWER: Quick Strike / Dash (Optimal minimum average waiting time)</p>
+            <p class="char-weakness">WEAKNESS: Starvation (Long CPU jobs wait indefinitely)</p>
+          </div>
+          <!-- Priority -->
+          <div class="char-card" data-char="priority">
+            <h3 class="char-name">ROYAL GUARD (PRIORITY)</h3>
+            <p class="char-role">The Elite Commander</p>
+            <p class="char-power">POWER: Royal Decree / Aging (VIP kernel tasks execute first)</p>
+            <p class="char-weakness">WEAKNESS: Peasant Starvation (Low priority jobs blocked)</p>
+          </div>
+          <!-- RR -->
+          <div class="char-card" data-char="rr">
+            <h3 class="char-name">TIME JUGGLER (ROUND ROBIN)</h3>
+            <p class="char-role">The Fair Rotator</p>
+            <p class="char-power">POWER: Time Slice (Fixed Quantum rotation, high responsiveness)</p>
+            <p class="char-weakness">WEAKNESS: Context Switch Tax (Overhead when quantum is tiny)</p>
+          </div>
+          <!-- MLFQ -->
+          <div class="char-card" data-char="mlfq">
+            <h3 class="char-name">KERNEL ARCHITECT (MLFQ)</h3>
+            <p class="char-role">The Multilevel Master</p>
+            <p class="char-power">POWER: Queue Demotion & Periodic Boost (Multi-tier feedback)</p>
+            <p class="char-weakness">WEAKNESS: Parameter Tuning Sensitivity (Complex queue calibration)</p>
+          </div>
+        </div>
+        <div style="display:flex; justify-content:space-between; margin-top:8px;">
+          <button id="btn-confirm-char" class="arcade-btn btn-primary">SELECT CHAMPION</button>
+          <button class="arcade-btn close-modal" data-target="char-select-overlay">BACK</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- 3. LEVEL SELECT OVERLAY -->
+    <div id="level-select-overlay" class="overlay-panel hidden">
+      <div class="modal-box">
+        <div class="modal-header">
+          <h2 class="modal-title">PUZZLE CAMPAIGN: MISSION SELECT</h2>
+          <button class="arcade-btn btn-danger close-modal" data-target="level-select-overlay">X</button>
+        </div>
+        <div id="levels-container" class="levels-grid"></div>
+        <div style="margin-top:12px; text-align:right;">
+          <button class="arcade-btn close-modal" data-target="level-select-overlay">BACK TO MENU</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- 4. LEVEL BRIEFING TIP MODAL -->
+    <div id="level-tip-overlay" class="overlay-panel hidden">
+      <div class="modal-box" style="max-width: 600px;">
+        <div class="modal-header">
+          <h2 id="tip-level-title" class="modal-title">MISSION BRIEFING</h2>
+          <button class="arcade-btn btn-danger close-modal" data-target="level-tip-overlay">X</button>
+        </div>
+        <p id="tip-level-concept" style="font-size: 10px; color: var(--gold-accent);"></p>
+        <div class="report-lesson">
+          <p id="tip-level-text" style="line-height: 1.6;"></p>
+        </div>
+        <div style="background-color: #21262d; padding: 12px; border: 2px solid #30363d; font-size: 8px;">
+          <p style="color: var(--green-win); margin-bottom: 6px;">MISSION GOALS:</p>
+          <p id="tip-level-goals" style="color: #fff;"></p>
+        </div>
+        <button id="btn-start-level" class="arcade-btn btn-primary" style="padding: 14px; font-size: 11px;">LAUNCH MISSION [>]</button>
+      </div>
+    </div>
+
+    <!-- 5. SANDBOX LAB OVERLAY -->
+    <div id="sandbox-overlay" class="overlay-panel hidden">
+      <div class="modal-box">
+        <div class="modal-header">
+          <h2 class="modal-title">SANDBOX WORKLOAD LAB</h2>
+          <button class="arcade-btn btn-danger close-modal" data-target="sandbox-overlay">X</button>
+        </div>
+        
+        <!-- Controls & Sliders -->
+        <div class="sandbox-controls">
+          <div>
+            <span class="bar-label">ALGORITHM: </span>
+            <select id="sb-algo-select" class="sandbox-input">
+              <option value="fcfs">FCFS (Queue Knight)</option>
+              <option value="sjf">SJF Non-preemptive</option>
+              <option value="srtf">SRTF (Preemptive SJF)</option>
+              <option value="priority">Priority Non-preemptive</option>
+              <option value="priority-preemptive">Priority Preemptive</option>
+              <option value="rr">Round Robin</option>
+              <option value="mlfq">MLFQ (Multi-Level Feedback)</option>
+            </select>
+          </div>
+          <div>
+            <span class="bar-label">QUANTUM (q): </span>
+            <input type="number" id="sb-quantum" class="sandbox-input" value="3" min="1" max="20" style="width: 50px;">
+          </div>
+          <div>
+            <span class="bar-label">CS COST: </span>
+            <input type="number" id="sb-cs-cost" class="sandbox-input" value="1" min="0" max="5" style="width: 50px;">
+          </div>
+          <div>
+            <span class="bar-label">AGING INTERVAL: </span>
+            <input type="number" id="sb-aging" class="sandbox-input" value="0" min="0" max="20" style="width: 50px;">
+          </div>
+          <div>
+            <button id="sb-preset-convoy" class="arcade-btn" style="font-size:7px;">PRESET: CONVOY</button>
+            <button id="sb-preset-starve" class="arcade-btn" style="font-size:7px;">PRESET: STARVATION</button>
+            <button id="sb-preset-textbook" class="arcade-btn" style="font-size:7px;">PRESET: TEXTBOOK</button>
+          </div>
+        </div>
+
+        <!-- Add / Edit Process Form -->
+        <div style="display:flex; gap:8px; align-items:center; background:#161b22; padding:8px; border:1px solid #30363d;">
+          <input type="hidden" id="proc-edit-index" value="-1">
+          <input type="text" id="proc-pid" class="sandbox-input" placeholder="PID" value="P_NEW" style="width:70px;">
+          <input type="number" id="proc-arrival" class="sandbox-input" placeholder="Arr" value="0" min="0" style="width:50px;">
+          <input type="number" id="proc-burst" class="sandbox-input" placeholder="Burst" value="4" min="1" style="width:50px;">
+          <input type="number" id="proc-priority" class="sandbox-input" placeholder="Prio" value="2" min="1" style="width:50px;">
+          <select id="proc-type" class="sandbox-input">
+            <option value="cpu">CPU-bound (Heavy)</option>
+            <option value="io">I/O-bound (Short)</option>
+          </select>
+          <button id="btn-add-process" class="arcade-btn btn-success">+ ADD / SAVE</button>
+          <button id="btn-cancel-edit" class="arcade-btn" style="display:none; font-size:7px;">CANCEL</button>
+        </div>
+
+        <!-- Process Workload Table -->
+        <table class="process-table">
+          <thead>
+            <tr>
+              <th>PID</th>
+              <th>ARRIVAL</th>
+              <th>BURST</th>
+              <th>PRIORITY</th>
+              <th>TYPE</th>
+              <th>ACTIONS</th>
+            </tr>
+          </thead>
+          <tbody id="sb-process-tbody"></tbody>
+        </table>
+
+        <div style="display:flex; justify-content:space-between; margin-top:10px;">
+          <button id="btn-run-sandbox" class="arcade-btn btn-primary">RUN IN SIMULATOR [>]</button>
+          <button class="arcade-btn close-modal" data-target="sandbox-overlay">CLOSE</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- 6. SCHEDULER DRAFT OVERLAY -->
+    <div id="draft-overlay" class="overlay-panel hidden">
+      <div class="modal-box">
+        <div class="modal-header">
+          <h2 class="modal-title">SCHEDULER DRAFT</h2>
+          <button class="arcade-btn btn-danger close-modal" data-target="draft-overlay">X</button>
+        </div>
+        <p style="font-size: 8px; color: var(--text-muted);">Inspect the incoming workload preview and draft the winning algorithm!</p>
+        <div id="draft-scenario-box" style="background:#21262d; padding:12px; border:2px solid #30363d;">
+          <h3 id="draft-scenario-name" style="font-size:11px; color:var(--gold-accent); margin-bottom:6px;"></h3>
+          <p id="draft-scenario-desc" style="font-size:8px; line-height:1.4; margin-bottom:10px;"></p>
+          <table class="process-table">
+            <thead>
+              <tr><th>PID</th><th>ARRIVAL</th><th>BURST</th><th>PRIORITY</th><th>TYPE</th></tr>
+            </thead>
+            <tbody id="draft-tbody"></tbody>
+          </table>
+        </div>
+        <p style="font-size:9px; color:#58a6ff;">SELECT YOUR DRAFT PICK:</p>
+        <div style="display:grid; grid-template-columns:repeat(4,1fr); gap:8px;">
+          <button class="arcade-btn draft-pick-btn" data-pick="fcfs">FCFS</button>
+          <button class="arcade-btn draft-pick-btn" data-pick="sjf">SJF</button>
+          <button class="arcade-btn draft-pick-btn" data-pick="priority">PRIORITY</button>
+          <button class="arcade-btn draft-pick-btn" data-pick="rr">ROUND ROBIN</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- 7. SPLIT-SCREEN VERSUS SETUP OVERLAY -->
+    <div id="versus-overlay" class="overlay-panel hidden">
+      <div class="modal-box" style="max-width: 600px;">
+        <div class="modal-header">
+          <h2 class="modal-title">SPLIT-SCREEN ALGORITHM DUEL</h2>
+          <button class="arcade-btn btn-danger close-modal" data-target="versus-overlay">X</button>
+        </div>
+        <p style="font-size: 8px; color: var(--text-muted);">Two schedulers execute the identical workload side-by-side in real time!</p>
+        <div style="display:grid; grid-template-columns: 1fr 1fr; gap:16px; margin: 12px 0;">
+          <div style="background:#21262d; padding:12px; border:2px solid #f1c40f;">
+            <p style="font-size:9px; color:#f1c40f; margin-bottom:8px;">LANE 1 CHAMPION:</p>
+            <select id="vs-lane1-select" class="sandbox-input" style="width:100%;">
+              <option value="fcfs">FCFS (Queue Knight)</option>
+              <option value="sjf">SJF (Speedster)</option>
+              <option value="priority">Priority (Royal Guard)</option>
+              <option value="rr">Round Robin (q=3)</option>
+              <option value="mlfq">MLFQ (Kernel Architect)</option>
+            </select>
+          </div>
+          <div style="background:#21262d; padding:12px; border:2px solid #2ecc71;">
+            <p style="font-size:9px; color:#2ecc71; margin-bottom:8px;">LANE 2 CHAMPION:</p>
+            <select id="vs-lane2-select" class="sandbox-input" style="width:100%;">
+              <option value="sjf" selected>SJF (Speedster)</option>
+              <option value="fcfs">FCFS (Queue Knight)</option>
+              <option value="priority">Priority (Royal Guard)</option>
+              <option value="rr">Round Robin (q=3)</option>
+              <option value="mlfq">MLFQ (Kernel Architect)</option>
+            </select>
+          </div>
+        </div>
+        <button id="btn-start-versus" class="arcade-btn btn-primary" style="padding:14px;">START SPLIT-SCREEN DUEL [>]</button>
+      </div>
+    </div>
+
+    <!-- 8. QUANTUM TUNER MINIGAME OVERLAY -->
+    <div id="tuner-overlay" class="overlay-panel hidden">
+      <div class="modal-box">
+        <div class="modal-header">
+          <h2 class="modal-title">QUANTUM TUNER MINIGAME</h2>
+          <button class="arcade-btn btn-danger close-modal" data-target="tuner-overlay">X</button>
+        </div>
+        <p style="font-size:8px; color:var(--text-muted);">Adjust the Time Quantum (q) and Context Switch Tax to observe the live efficiency trade-off curve!</p>
+        <div style="display:flex; gap:16px; align-items:center; background:#21262d; padding:10px;">
+          <div>
+            <span class="bar-label">TIME QUANTUM (q): </span>
+            <input type="range" id="tuner-quantum-slider" min="1" max="12" value="3" style="vertical-align:middle;">
+            <span id="tuner-q-val" style="font-size:9px; color:var(--gold-accent);">3</span>
+          </div>
+          <div>
+            <span class="bar-label">CONTEXT SWITCH COST: </span>
+            <input type="range" id="tuner-cs-slider" min="0" max="3" value="1" style="vertical-align:middle;">
+            <span id="tuner-cs-val" style="font-size:9px; color:var(--red-loss);">1</span>
+          </div>
+        </div>
+        <canvas id="tuner-graph-canvas" width="700" height="200"></canvas>
+        <div id="tuner-recommendation" class="report-lesson"></div>
+      </div>
+    </div>
+
+    <!-- 9. REPORT CARD / GAME-STATE OVERLAY (Victory, Defeat) -->
+    <div id="report-overlay" class="overlay-panel hidden">
+      <div class="modal-box" style="max-width: 640px;">
+        <div class="modal-header">
+          <h2 id="report-title" class="modal-title">MISSION COMPLETE</h2>
+        </div>
+        <div style="text-align:center;">
+          <div id="report-stars" style="font-size:18px; margin-bottom:8px; color:var(--gold-accent);"></div>
+          <p id="report-score-banner" style="font-size:11px; color:#58a6ff;"></p>
+        </div>
+
+        <div class="report-card">
+          <div class="report-grid">
+            <div class="report-item">
+              <span class="report-label">AVERAGE WAITING TIME:</span>
+              <span id="rep-avg-wt" class="report-value">0.00</span>
+            </div>
+            <div class="report-item">
+              <span class="report-label">AVERAGE TURNAROUND:</span>
+              <span id="rep-avg-tat" class="report-value">0.00</span>
+            </div>
+            <div class="report-item">
+              <span class="report-label">AVERAGE RESPONSE TIME:</span>
+              <span id="rep-avg-rt" class="report-value">0.00</span>
+            </div>
+            <div class="report-item">
+              <span class="report-label">CPU UTILIZATION:</span>
+              <span id="rep-cpu-util" class="report-value">0%</span>
+            </div>
+            <div class="report-item">
+              <span class="report-label">THROUGHPUT:</span>
+              <span id="rep-throughput" class="report-value">0.000</span>
+            </div>
+            <div class="report-item">
+              <span class="report-label">CONTEXT SWITCHES:</span>
+              <span id="rep-cs-count" class="report-value">0</span>
+            </div>
+          </div>
+        </div>
+
+        <div id="report-lesson-box" class="report-lesson"></div>
+
+        <div style="display:flex; justify-content:space-between; margin-top:8px;">
+          <button id="rep-btn-retry" class="arcade-btn">RETRY [R]</button>
+          <button id="rep-btn-next" class="arcade-btn btn-primary">NEXT MISSION [>]</button>
+          <button id="rep-btn-menu" class="arcade-btn close-modal" data-target="report-overlay">MAIN MENU</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- 10. HOW TO PLAY & OS GUIDE OVERLAY -->
+    <div id="guide-overlay" class="overlay-panel hidden">
+      <div class="modal-box">
+        <div class="modal-header">
+          <h2 class="modal-title">OPERATING SYSTEMS VIVA SURVIVAL GUIDE</h2>
+          <button class="arcade-btn btn-danger close-modal" data-target="guide-overlay">X</button>
+        </div>
+        <div style="display:flex; flex-direction:column; gap:12px; font-size:8px; line-height:1.6;">
+          <div class="report-lesson">
+            <h4 style="color:var(--gold-accent); margin-bottom:4px;">1. FIRST-COME, FIRST-SERVED (FCFS)</h4>
+            <p>Non-preemptive FIFO queue. Processes run in chronological arrival order. Simple, zero context-switch overhead, but suffers from the <strong>Convoy Effect</strong> when heavy CPU jobs block light I/O tasks.</p>
+          </div>
+          <div class="report-lesson">
+            <h4 style="color:var(--green-win); margin-bottom:4px;">2. SHORTEST JOB FIRST (SJF / SRTF)</h4>
+            <p>Selects process with minimal CPU burst. Provably optimal for minimizing average waiting time. Preemptive version is <strong>Shortest Remaining Time First (SRTF)</strong>. Main flaw: <strong>Starvation</strong> of long CPU jobs.</p>
+          </div>
+          <div class="report-lesson">
+            <h4 style="color:var(--gold-accent); margin-bottom:4px;">3. PRIORITY SCHEDULING & AGING</h4>
+            <p>Highest priority (lowest integer value) dispatched first. Solves real-time OS dispatching. Solves starvation using <strong>Aging</strong>: waiting tasks gradually receive priority promotions over time.</p>
+          </div>
+          <div class="report-lesson">
+            <h4 style="color:var(--purple-magic); margin-bottom:4px;">4. ROUND ROBIN (RR)</h4>
+            <p>Designed for time-sharing. Each ready task gets a time quantum <em>q</em> before being re-enqueued. High responsiveness. Weakness: Excessive context switching if <em>q</em> is too small.</p>
+          </div>
+          <div class="report-lesson">
+            <h4 style="color:var(--blue-tech); margin-bottom:4px;">5. MULTI-LEVEL FEEDBACK QUEUE (MLFQ)</h4>
+            <p>Production OS scheduler (Solaris, BSD, Windows, macOS). Features multiple priority tiers (Q0, Q1, Q2) with diminishing quanta. Periodic all-jobs boost eliminates starvation.</p>
+          </div>
+          <div style="background:#21262d; padding:8px; border:1px solid #30363d;">
+            <p style="color:var(--border-glow);">KEYBOARD SHORTCUTS:</p>
+            <p>Space: Play / Pause | Right Arrow / D: Step Tick | R: Reset | Esc: Pause Menu | P: Trigger Power</p>
+          </div>
+        </div>
+        <button class="arcade-btn close-modal" data-target="guide-overlay">CLOSE GUIDE</button>
+      </div>
+    </div>
+
+    <!-- 11. AUDIO & SETTINGS OVERLAY -->
+    <div id="settings-overlay" class="overlay-panel hidden">
+      <div class="modal-box" style="max-width: 500px;">
+        <div class="modal-header">
+          <h2 class="modal-title">AUDIO & GAME SETTINGS</h2>
+          <button class="arcade-btn btn-danger close-modal" data-target="settings-overlay">X</button>
+        </div>
+        <div style="display:flex; flex-direction:column; gap:16px; padding:8px;">
+          <div style="display:flex; justify-content:space-between; align-items:center;">
+            <span style="font-size:9px;">SOUND EFFECTS:</span>
+            <button id="btn-toggle-sound" class="arcade-btn btn-success">ENABLED [ON]</button>
+          </div>
+          <div style="display:flex; justify-content:space-between; align-items:center;">
+            <span style="font-size:9px;">VOLUME:</span>
+            <input type="range" id="settings-volume" min="0" max="1" step="0.1" value="0.3">
+          </div>
+          <div style="display:flex; justify-content:space-between; align-items:center;">
+            <span style="font-size:9px;">SCREEN SHAKE FX:</span>
+            <button id="btn-toggle-shake" class="arcade-btn btn-success">ENABLED [ON]</button>
+          </div>
+        </div>
+        <button class="arcade-btn close-modal" data-target="settings-overlay">SAVE & CLOSE</button>
+      </div>
+    </div>
+
+    <!-- 12. PRIVACY POLICY MODAL -->
+    <div id="privacy-overlay" class="overlay-panel hidden">
+      <div class="modal-box" style="max-width: 600px;">
+        <div class="modal-header">
+          <h2 class="modal-title">PRIVACY POLICY</h2>
+          <button class="arcade-btn btn-danger close-modal" data-target="privacy-overlay">X</button>
+        </div>
+        <div style="font-size:8px; line-height:1.6; display:flex; flex-direction:column; gap:10px;">
+          <p><strong>Zero Data Collection:</strong> Scheduler Arcade runs 100% locally in your web browser. No telemetry, tracking cookies, analytics, or external server calls are performed.</p>
+          <p><strong>Local Storage:</strong> Browser localStorage is used solely to store your offline level completion stars and unlocked puzzle missions. This data remains on your local machine.</p>
+          <p><strong>No Third Parties:</strong> All assets, audio, and visual sprites are generated procedurally with native browser APIs. No third-party data exchange occurs.</p>
+        </div>
+        <button class="arcade-btn close-modal" data-target="privacy-overlay">CLOSE</button>
+      </div>
+    </div>
+
+    <!-- 13. TERMS OF SERVICE MODAL -->
+    <div id="terms-overlay" class="overlay-panel hidden">
+      <div class="modal-box" style="max-width: 600px;">
+        <div class="modal-header">
+          <h2 class="modal-title">TERMS OF SERVICE</h2>
+          <button class="arcade-btn btn-danger close-modal" data-target="terms-overlay">X</button>
+        </div>
+        <div style="font-size:8px; line-height:1.6; display:flex; flex-direction:column; gap:10px;">
+          <p><strong>Educational Purpose:</strong> Scheduler Arcade is an interactive instructional tool designed for Operating Systems computer science curriculum study.</p>
+          <p><strong>Open Academic License:</strong> Provided under the MIT License guidelines. Free for academic study, classroom demonstrations, and viva preparation.</p>
+          <p><strong>No Warranty:</strong> The software is provided as-is to demonstrate theoretical scheduling models based on standard textbook specifications.</p>
+        </div>
+        <button class="arcade-btn close-modal" data-target="terms-overlay">CLOSE</button>
+      </div>
+    </div>
+
+  </div>
+
+  <!-- Main ES Module Bootstrap -->
+  <script type="module" src="main.js"></script>
+</body>
+</html>

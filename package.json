@@ -1,0 +1,9 @@
+{
+  "name": "scheduler-arcade",
+  "version": "1.0.0",
+  "description": "Educational CPU scheduling arcade game for OS concepts",
+  "type": "module",
+  "scripts": {
+    "test": "node tests.js"
+  }
+}
