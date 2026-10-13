@@ -122,6 +122,9 @@ class GameController {
           audio.playDefeat();
           this.handleDefeat(this.engine1);
           break;
+        case 'kernel_log':
+          this.appendKernelLog(data);
+          break;
       }
     });
 
@@ -327,6 +330,61 @@ class GameController {
       }
     });
 
+    // Kernel Log Terminal Controls
+    const btnToggleLog = document.getElementById('btn-toggle-log');
+    if (btnToggleLog) {
+      btnToggleLog.addEventListener('click', () => {
+        audio.playSelect();
+        this.toggleKernelLog();
+      });
+    }
+
+    const btnCloseLog = document.getElementById('btn-close-log');
+    if (btnCloseLog) {
+      btnCloseLog.addEventListener('click', () => {
+        audio.playSelect();
+        document.getElementById('kernel-log-panel').classList.add('hidden');
+      });
+    }
+
+    const btnClearLog = document.getElementById('btn-clear-log');
+    if (btnClearLog) {
+      btnClearLog.addEventListener('click', () => {
+        audio.playSelect();
+        document.getElementById('kernel-log-entries').innerHTML = '';
+      });
+    }
+
+    // Canvas Interactive Hover & Click Process Inspector
+    this.canvas.addEventListener('mousemove', (e) => {
+      const rect = this.canvas.getBoundingClientRect();
+      const scaleX = this.canvas.width / rect.width;
+      const scaleY = this.canvas.height / rect.height;
+      const mouseX = (e.clientX - rect.left) * scaleX;
+      const mouseY = (e.clientY - rect.top) * scaleY;
+
+      const card = this.renderer.getProcessAt(mouseX, mouseY);
+      if (card) {
+        this.canvas.classList.add('interactive-cursor');
+      } else {
+        this.canvas.classList.remove('interactive-cursor');
+      }
+    });
+
+    this.canvas.addEventListener('click', (e) => {
+      const rect = this.canvas.getBoundingClientRect();
+      const scaleX = this.canvas.width / rect.width;
+      const scaleY = this.canvas.height / rect.height;
+      const clickX = (e.clientX - rect.left) * scaleX;
+      const clickY = (e.clientY - rect.top) * scaleY;
+
+      const card = this.renderer.getProcessAt(clickX, clickY);
+      if (card) {
+        audio.playSelect();
+        this.showProcessInspector(card);
+      }
+    });
+
     // Keyboard Shortcuts
     window.addEventListener('keydown', (e) => {
       switch (e.code) {
@@ -344,11 +402,89 @@ class GameController {
         case 'KeyP':
           this.triggerActivePower();
           break;
+        case 'KeyL':
+          this.toggleKernelLog();
+          break;
         case 'Escape':
           this.togglePauseMenu();
           break;
       }
     });
+  }
+
+  toggleKernelLog() {
+    const logPanel = document.getElementById('kernel-log-panel');
+    if (logPanel) logPanel.classList.toggle('hidden');
+  }
+
+  appendKernelLog(entry) {
+    const container = document.getElementById('kernel-log-entries');
+    if (!container) return;
+
+    const div = document.createElement('div');
+    div.className = `log-entry log-${entry.type}`;
+    div.textContent = entry.message;
+    container.appendChild(div);
+
+    while (container.childNodes.length > 60) {
+      container.removeChild(container.firstChild);
+    }
+    container.scrollTop = container.scrollHeight;
+  }
+
+  showProcessInspector(card) {
+    const proc = card.proc;
+    const isRunning = card.isExecuting;
+    const overlayMeta = card.overlayMeta || {};
+
+    document.getElementById('inspect-title').textContent = `PROCESS INSPECTOR: ${proc.pid}`;
+    document.getElementById('inspect-state').textContent = isRunning ? 'RUNNING ON CPU' : (overlayMeta.state === 'ready' ? 'READY IN QUEUE' : 'UNARRIVED POOL');
+    document.getElementById('inspect-state').style.color = isRunning ? '#3fb950' : (overlayMeta.state === 'ready' ? '#58a6ff' : '#8b949e');
+    document.getElementById('inspect-type').textContent = proc.type === 'io' ? 'I/O-BOUND (SHORT)' : 'CPU-BOUND (HEAVY)';
+    document.getElementById('inspect-type').style.color = proc.type === 'io' ? '#1abc9c' : '#e74c3c';
+    document.getElementById('inspect-arrival').textContent = `${proc.arrival} ticks`;
+    document.getElementById('inspect-burst').textContent = `${proc.burst} ticks`;
+    document.getElementById('inspect-remaining').textContent = `${proc.remaining} ticks`;
+    document.getElementById('inspect-priority').textContent = `${proc.effectivePriority ?? proc.priority}${proc.effectivePriority !== undefined && proc.effectivePriority < proc.priority ? ' (AGED +' + (proc.priority - proc.effectivePriority) + ')' : ''}`;
+    document.getElementById('inspect-wait').textContent = `${proc.waitingTime ?? (proc.waitTicks || 0)} ticks`;
+    document.getElementById('inspect-response').textContent = proc.responseTime !== undefined ? `${proc.responseTime} ticks` : (isRunning ? '0 ticks' : 'Pending');
+
+    let rationale = '';
+    const algo = this.engine1.algoKey;
+    if (isRunning) {
+      if (algo === 'fcfs') {
+        rationale = `${proc.pid} holds the CPU because it was the earliest arrival among all ready tasks. Non-preemptive FIFO means it runs uninterrupted until completion.`;
+      } else if (algo === 'sjf') {
+        rationale = `${proc.pid} holds the CPU because its burst requirement (${proc.remaining} remaining) was the minimum among all ready tasks.`;
+      } else if (algo === 'priority') {
+        rationale = `${proc.pid} was granted CPU execution due to holding the highest priority rank (Priority ${proc.effectivePriority ?? proc.priority}).`;
+      } else if (algo === 'rr') {
+        rationale = `${proc.pid} is executing its assigned time slice. It will yield after quantum expiration or job termination.`;
+      } else if (algo === 'mlfq') {
+        rationale = `${proc.pid} was dispatched from Multi-Level tier Q${proc.queueLevel ?? 0}. Heavy CPU bursts get demoted to lower tiers to protect interactive jobs.`;
+      }
+    } else if (overlayMeta.state === 'ready') {
+      if (algo === 'fcfs') {
+        rationale = `${proc.pid} is queued at position #${(overlayMeta.queueIndex ?? 0) + 1}. Under FCFS, it must wait for all prior tasks in the queue to finish execution.`;
+      } else if (algo === 'sjf') {
+        rationale = overlayMeta.minBadge
+          ? `${proc.pid} has the shortest remaining burst (${proc.remaining} ticks) and is scheduled to be dispatched as soon as the CPU frees up!`
+          : `${proc.pid} has ${proc.remaining} ticks remaining, waiting behind shorter jobs. In pure SJF, arriving short jobs can cause starvation for longer tasks.`;
+      } else if (algo === 'priority') {
+        rationale = overlayMeta.prioBadge
+          ? `${proc.pid} currently holds the highest priority in queue (Priority ${proc.effectivePriority ?? proc.priority}) and will preempt or be dispatched next!`
+          : `${proc.pid} has lower priority (${proc.effectivePriority ?? proc.priority}). Waiting will gradually trigger aging promotions if aging is enabled.`;
+      } else if (algo === 'rr') {
+        rationale = `${proc.pid} is rotating in the round-robin queue. It will receive its time quantum in strict rotation order.`;
+      } else {
+        rationale = `${proc.pid} is waiting in the ready queue for CPU allocation.`;
+      }
+    } else {
+      rationale = `${proc.pid} has not yet arrived into the operating system. Scheduled arrival tick: ${proc.arrival}.`;
+    }
+
+    document.getElementById('inspect-rationale').textContent = rationale;
+    this.openOverlay('inspect-modal');
   }
 
   togglePlayPause() {

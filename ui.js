@@ -60,6 +60,9 @@ export class PixelRenderer {
     // Particles
     this.particles = [];
 
+    // Clickable / Inspectable Cards Cache
+    this.renderedCards = [];
+
     // Offscreen Sprite Cache
     this.sprites = {};
     this.buildProceduralSprites();
@@ -397,6 +400,7 @@ export class PixelRenderer {
    */
   render(engine, frameCount = 0) {
     const ctx = this.ctx;
+    this.renderedCards = [];
 
     // Handle screen shake
     ctx.save();
@@ -643,20 +647,61 @@ export class PixelRenderer {
     ctx.textAlign = 'center';
     ctx.fillText(charMeta.name, charScreenX + 18, charScreenY - 8);
 
-    // 2. Render Running Process (Active Obstacle/Job being executed)
+    // 2. Render Hardware CPU Socket with Bus Lines & Flow Arrows
+    const socketX = charScreenX + 46;
+    const socketY = this.groundY - 46;
+    const socketW = 50;
+    const socketH = 42;
+    this.renderCpuSocket(socketX, socketY, socketW, socketH, engine, frameCount);
+
+    // Data Flow Indicator: READY QUEUE ---> CPU SOCKET
+    ctx.fillStyle = '#8b949e';
+    ctx.font = '6px "Press Start 2P", monospace';
+    ctx.textAlign = 'center';
+    ctx.fillText('[READY] ->', charScreenX - 10, this.groundY - 48);
+
+    // 3. Render Running Process inside the CPU Core Socket
     if (engine.runningProcess) {
       const proc = engine.runningProcess;
-      const procX = charScreenX + 44;
+      const procX = socketX + (socketW - (proc.pid.includes('BOSS') ? 48 : 32)) / 2;
       const procY = this.groundY - 40;
-      this.renderProcessCard(proc, procX, procY, true, frameCount);
+      this.renderProcessCard(proc, procX, procY, true, frameCount, { state: 'running' });
     }
 
-    // 3. Render Ready Queue Waiting Processes
+    // Pre-calculate Decision Overlays for Ready Queue
+    let minBurstProc = null;
+    let highestPrioProc = null;
+    if (engine.readyQueue.length > 0) {
+      if (engine.algoKey === 'sjf') {
+        minBurstProc = engine.readyQueue.reduce((min, p) => (p.remaining < min.remaining ? p : min), engine.readyQueue[0]);
+      } else if (engine.algoKey === 'priority') {
+        highestPrioProc = engine.readyQueue.reduce((best, p) => (p.effectivePriority < best.effectivePriority ? p : best), engine.readyQueue[0]);
+      }
+    }
+
+    // 4. Render Ready Queue Waiting Processes with Algorithm Overlays
     let queueOffset = 0;
     for (const proc of engine.readyQueue) {
-      const qX = charScreenX - 55 - queueOffset * 48;
+      const qX = charScreenX - 60 - queueOffset * 52;
       const qY = this.groundY - 40;
-      this.renderProcessCard(proc, qX, qY, false, frameCount);
+
+      const overlayMeta = {
+        state: 'ready',
+        queueIndex: queueOffset
+      };
+
+      if (engine.algoKey === 'fcfs') {
+        overlayMeta.rank = queueOffset + 1;
+      } else if (engine.algoKey === 'sjf' && proc === minBurstProc) {
+        overlayMeta.minBadge = true;
+      } else if (engine.algoKey === 'priority') {
+        if (proc === highestPrioProc) overlayMeta.prioBadge = true;
+        if (proc.waitTicks > 0 && proc.effectivePriority < proc.priority) overlayMeta.aged = true;
+      } else if (engine.algoKey === 'mlfq') {
+        overlayMeta.tier = 'Q' + (proc.queueLevel ?? 0);
+      }
+
+      this.renderProcessCard(proc, qX, qY, false, frameCount, overlayMeta);
       queueOffset++;
     }
 
@@ -696,17 +741,84 @@ export class PixelRenderer {
       }
     }
 
-    // 4. Render Unarrived Incoming Processes Ahead on Timeline
+    // 5. Render Unarrived Incoming Processes Ahead on Timeline
     for (const proc of engine.incomingPool) {
       const pWorldX = proc.arrival * this.tileSize;
       const pScreenX = pWorldX - this.cameraX;
       if (pScreenX > -50 && pScreenX < this.width + 50) {
-        this.renderProcessCard(proc, pScreenX, this.groundY - 40, false, frameCount);
+        this.renderProcessCard(proc, pScreenX, this.groundY - 40, false, frameCount, { state: 'incoming' });
       }
     }
   }
 
-  renderProcessCard(proc, x, y, isExecuting, frameCount) {
+  renderCpuSocket(x, y, w, h, engine, frameCount) {
+    const ctx = this.ctx;
+    const isBusy = engine.runningProcess !== null;
+    const isCs = engine.contextSwitchFreeze > 0;
+
+    // Outer Socket Base Plate
+    ctx.fillStyle = '#161b22';
+    ctx.fillRect(x - 6, y - 8, w + 12, h + 16);
+
+    // Glowing border (Green if computing, Red if CS, Blue/Dark if idle)
+    let borderColor = '#30363d';
+    if (isCs) borderColor = '#e74c3c';
+    else if (isBusy) borderColor = (Math.floor(frameCount / 10) % 2 === 0) ? '#3fb950' : '#2ea043';
+
+    ctx.strokeStyle = borderColor;
+    ctx.lineWidth = 2;
+    ctx.strokeRect(x - 6, y - 8, w + 12, h + 16);
+
+    // Gold Corner Screws / Pins
+    ctx.fillStyle = '#d29922';
+    ctx.fillRect(x - 4, y - 6, 3, 3);
+    ctx.fillRect(x + w + 1, y - 6, 3, 3);
+    ctx.fillRect(x - 4, y + h + 5, 3, 3);
+    ctx.fillRect(x + w + 1, y + h + 5, 3, 3);
+
+    // Electronic Circuit Pins at bottom
+    for (let p = 0; p < 5; p++) {
+      ctx.fillStyle = (isBusy && (frameCount + p) % 3 === 0) ? '#58a6ff' : '#21262d';
+      ctx.fillRect(x + p * 10 + 4, y + h + 8, 4, 3);
+    }
+
+    // Socket Top Header Label
+    ctx.fillStyle = isBusy ? '#58a6ff' : '#8b949e';
+    ctx.font = '7px "Press Start 2P", monospace';
+    ctx.textAlign = 'center';
+    ctx.fillText('[CPU CORE]', x + w / 2, y - 12);
+
+    // Status under socket
+    ctx.fillStyle = isCs ? '#e74c3c' : (isBusy ? '#3fb950' : '#484f58');
+    ctx.font = '6px "Press Start 2P", monospace';
+    const statusText = isCs ? 'CS OVERHEAD' : (isBusy ? 'COMPUTING' : 'IDLE');
+    ctx.fillText(statusText, x + w / 2, y + h + 18);
+
+    // If RR or MLFQ: Render Quantum Slice Progress Bar
+    if ((engine.algoKey === 'rr' || engine.algoKey === 'mlfq') && isBusy) {
+      const qRem = engine.quantumRemaining ?? engine.quantum;
+      const qTotal = engine.quantum || 3;
+      const qW = w + 12;
+      const qH = 5;
+      const qY = y - 22;
+
+      ctx.fillStyle = '#0d1117';
+      ctx.fillRect(x - 6, qY, qW, qH);
+      ctx.strokeStyle = '#bd93f9';
+      ctx.lineWidth = 1;
+      ctx.strokeRect(x - 6, qY, qW, qH);
+
+      const fillW = Math.max(0, Math.floor((qRem / qTotal) * qW));
+      ctx.fillStyle = qRem <= 1 ? '#ff7b72' : '#bd93f9';
+      ctx.fillRect(x - 6, qY, fillW, qH);
+
+      ctx.fillStyle = '#ffffff';
+      ctx.font = '6px "Press Start 2P", monospace';
+      ctx.fillText(`SLICE ${qRem}/${qTotal}`, x + w / 2, qY - 3);
+    }
+  }
+
+  renderProcessCard(proc, x, y, isExecuting, frameCount, overlayMeta = {}) {
     const ctx = this.ctx;
     const isBoss = proc.pid.includes('BOSS') || proc.burst > 20;
 
@@ -716,6 +828,17 @@ export class PixelRenderer {
 
     const size = isBoss ? 48 : 32;
     const drawY = isBoss ? y - 16 : y;
+
+    // Register clickable bounding box for interactive inspection
+    this.renderedCards.push({
+      proc,
+      x,
+      y: drawY,
+      width: size,
+      height: size,
+      isExecuting,
+      overlayMeta
+    });
 
     if (sprite) {
       // Bobbing animation
@@ -737,6 +860,56 @@ export class PixelRenderer {
     ctx.fillStyle = '#f1c40f';
     ctx.fillText(`R:${proc.remaining} P:${proc.effectivePriority ?? proc.priority}`, x + size / 2, drawY - 4);
 
+    // Algorithm Decision Overlays (Visual Indicators)
+    if (overlayMeta.rank) {
+      // FCFS Queue Rank
+      ctx.fillStyle = overlayMeta.rank === 1 ? '#388bfd' : '#21262d';
+      ctx.fillRect(x - 6, drawY - 34, size + 12, 10);
+      ctx.strokeStyle = overlayMeta.rank === 1 ? '#58a6ff' : '#484f58';
+      ctx.strokeRect(x - 6, drawY - 34, size + 12, 10);
+      ctx.fillStyle = '#ffffff';
+      ctx.font = '6px "Press Start 2P", monospace';
+      ctx.fillText(overlayMeta.rank === 1 ? '#1 NEXT' : `#${overlayMeta.rank}`, x + size / 2, drawY - 26);
+    } else if (overlayMeta.minBadge) {
+      // SJF Shortest Job Highlight
+      const pulse = Math.floor(frameCount / 8) % 2 === 0;
+      ctx.fillStyle = pulse ? '#d29922' : '#9e6a03';
+      ctx.fillRect(x - 8, drawY - 35, size + 16, 11);
+      ctx.strokeStyle = '#f1c40f';
+      ctx.lineWidth = 1;
+      ctx.strokeRect(x - 8, drawY - 35, size + 16, 11);
+      ctx.fillStyle = '#000000';
+      ctx.font = '6px "Press Start 2P", monospace';
+      ctx.fillText('★ MIN', x + size / 2, drawY - 27);
+    } else if (overlayMeta.prioBadge) {
+      // Priority VIP Crown Highlight
+      ctx.fillStyle = '#f39c12';
+      ctx.fillRect(x - 6, drawY - 34, size + 12, 10);
+      ctx.strokeStyle = '#f1c40f';
+      ctx.strokeRect(x - 6, drawY - 34, size + 12, 10);
+      ctx.fillStyle = '#000000';
+      ctx.font = '6px "Press Start 2P", monospace';
+      ctx.fillText('👑 VIP', x + size / 2, drawY - 26);
+    } else if (overlayMeta.tier) {
+      // MLFQ Tier Badge
+      ctx.fillStyle = '#6f42c1';
+      ctx.fillRect(x - 6, drawY - 34, size + 12, 10);
+      ctx.strokeStyle = '#d2a8ff';
+      ctx.strokeRect(x - 6, drawY - 34, size + 12, 10);
+      ctx.fillStyle = '#ffffff';
+      ctx.font = '6px "Press Start 2P", monospace';
+      ctx.fillText(overlayMeta.tier, x + size / 2, drawY - 26);
+    }
+
+    if (overlayMeta.aged) {
+      // Aging Promotion indicator
+      ctx.fillStyle = '#238636';
+      ctx.fillRect(x - 6, drawY + size + 2, size + 12, 9);
+      ctx.fillStyle = '#3fb950';
+      ctx.font = '6px "Press Start 2P", monospace';
+      ctx.fillText('▲ AGED', x + size / 2, drawY + size + 9);
+    }
+
     // Starvation Hunger Meter (above badge)
     if (!isExecuting && proc.waitTicks !== undefined) {
       const maxWait = 14;
@@ -749,6 +922,21 @@ export class PixelRenderer {
       ctx.fillStyle = hungerRatio > 0.7 ? '#ff0033' : '#f39c12';
       ctx.fillRect(x - 5, drawY - 28, barW * hungerRatio, 4);
     }
+  }
+
+  getProcessAt(screenX, screenY) {
+    for (let i = this.renderedCards.length - 1; i >= 0; i--) {
+      const card = this.renderedCards[i];
+      if (
+        screenX >= card.x - 8 &&
+        screenX <= card.x + card.width + 8 &&
+        screenY >= card.y - 36 &&
+        screenY <= card.y + card.height + 14
+      ) {
+        return card;
+      }
+    }
+    return null;
   }
 
   renderParticles() {

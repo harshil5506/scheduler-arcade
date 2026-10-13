@@ -25,6 +25,7 @@
       </div>
 
       <div class="bar-group">
+        <button id="btn-toggle-log" class="arcade-btn" title="Toggle Real-Time Kernel Decision Log [L]">LOG [L]</button>
         <button id="btn-preempt" class="arcade-btn btn-warning" title="Trigger Preemption / Signature Power">POWER [P]</button>
         <button id="btn-sandbox-open" class="arcade-btn" title="Configure Workload & Sliders">CONFIG</button>
         <button id="btn-pause-menu" class="arcade-btn" title="Open Main Menu [Esc]">MENU [ESC]</button>
@@ -444,6 +445,69 @@
           <p><strong>No Warranty:</strong> The software is provided as-is to demonstrate theoretical scheduling models based on standard textbook specifications.</p>
         </div>
         <button class="arcade-btn close-modal" data-target="terms-overlay">CLOSE</button>
+      </div>
+    </div>
+
+    <!-- 14. KERNEL DECISION LOG TERMINAL (Educational Explainability) -->
+    <div id="kernel-log-panel" class="hidden">
+      <div class="kernel-log-header">
+        <span class="kernel-log-title">[KERNEL DECISION TRACE]</span>
+        <div class="kernel-log-actions">
+          <button id="btn-clear-log" class="arcade-btn" style="font-size:7px; padding:3px 6px;">CLEAR</button>
+          <button id="btn-close-log" class="arcade-btn btn-danger" style="font-size:7px; padding:3px 6px;">X</button>
+        </div>
+      </div>
+      <div id="kernel-log-entries" class="kernel-log-body"></div>
+    </div>
+
+    <!-- 15. PROCESS DIAGNOSTIC INSPECTOR MODAL -->
+    <div id="inspect-modal" class="overlay-panel hidden">
+      <div class="modal-box" style="max-width: 520px;">
+        <div class="modal-header">
+          <h2 id="inspect-title" class="modal-title">PROCESS INSPECTOR: P1</h2>
+          <button class="arcade-btn btn-danger close-modal" data-target="inspect-modal">X</button>
+        </div>
+        <div class="report-card" style="margin: 6px 0;">
+          <div class="report-grid">
+            <div class="report-item">
+              <span class="report-label">STATE:</span>
+              <span id="inspect-state" class="report-value" style="color:#58a6ff;">RUNNING</span>
+            </div>
+            <div class="report-item">
+              <span class="report-label">JOB TYPE:</span>
+              <span id="inspect-type" class="report-value">CPU-BOUND</span>
+            </div>
+            <div class="report-item">
+              <span class="report-label">ARRIVAL TICK:</span>
+              <span id="inspect-arrival" class="report-value">0</span>
+            </div>
+            <div class="report-item">
+              <span class="report-label">BURST TIME:</span>
+              <span id="inspect-burst" class="report-value">5</span>
+            </div>
+            <div class="report-item">
+              <span class="report-label">REMAINING:</span>
+              <span id="inspect-remaining" class="report-value">3</span>
+            </div>
+            <div class="report-item">
+              <span class="report-label">EFFECTIVE PRIO:</span>
+              <span id="inspect-priority" class="report-value">2</span>
+            </div>
+            <div class="report-item">
+              <span class="report-label">WAIT TIME:</span>
+              <span id="inspect-wait" class="report-value">0</span>
+            </div>
+            <div class="report-item">
+              <span class="report-label">RESPONSE TIME:</span>
+              <span id="inspect-response" class="report-value">0</span>
+            </div>
+          </div>
+        </div>
+        <div class="report-lesson">
+          <h4 style="color:var(--gold-accent); margin-bottom:4px;">KERNEL SCHEDULER RATIONALE</h4>
+          <p id="inspect-rationale" style="line-height:1.5; font-size:8px;"></p>
+        </div>
+        <button class="arcade-btn close-modal" data-target="inspect-modal" style="width:100%; margin-top:4px;">DISMISS</button>
       </div>
     </div>
 
