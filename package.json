@@ -4,6 +4,7 @@
   "description": "Educational CPU scheduling arcade game for OS concepts",
   "type": "module",
   "scripts": {
+    "start": "node server.js",
     "test": "node tests.js"
   }
 }
